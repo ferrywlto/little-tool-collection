@@ -15,7 +15,7 @@ public class DictionarySplitterByLength {
         await p.Load(dictFilePath);
         t.PrintTimeUsedSinceLastTask();
 
-        await p.GroupAndCount();
+        p.GroupWordsByLength();
         t.PrintTimeUsedSinceLastTask();
 
         await p.ExportByLength();
@@ -27,7 +27,7 @@ public class DictionarySplitterByLength {
     private readonly bool exportAnalysis;
 
     private List<string> _words = new();
-    private Dictionary<int, List<string>> _dictWordListByLength = new();
+    private Dictionary<int, List<string>> _wordListByLength = new();
     private Dictionary<int, Dictionary<char, int>> _charCountByLength = new();
     private Dictionary<char, int> _globalCharCount = new();
 
@@ -45,6 +45,28 @@ public class DictionarySplitterByLength {
         _words = CleanseInputList(loadedWords).ToList();
     }
 
+    private static IEnumerable<string> CleanseInputList(IEnumerable<string> input) =>
+        FilterDuplicate(input.Select(CleanseInput)).OrderBy(s => s);
+    private static IEnumerable<string> FilterDuplicate(IEnumerable<string> input) => input.Distinct();
+    private static string CleanseInput(string input) => input.Trim().ToLowerInvariant();
+    public void GroupWordsByLength() {
+        _words.ForEach(AddToWordListByLength);
+    }
+    private void AddToWordListByLength(string word) {
+        InitWordListByLengthIfNotExist(word.Length);
+        _wordListByLength[word.Length].Add(word);
+    }
+    private void InitWordListByLengthIfNotExist(int length) {
+        if (!_wordListByLength.ContainsKey(length))
+            _wordListByLength.Add(length, new List<string>());
+    }
+    public async Task ExportByLength(string outputFilePath = "") {
+        foreach (var length in _wordListByLength.Keys) {
+            var wordList = _wordListByLength[length];
+            await File.WriteAllLinesAsync(Path.Combine(outputFilePath, $"len{length:d2}.txt"), wordList);
+        }
+    }
+
     private void IncreaseCharCountByChar(char glyph) {
         InitCharCountByCharEntryIfNotExist(glyph);
         _globalCharCount[glyph] += 1;
@@ -53,20 +75,10 @@ public class DictionarySplitterByLength {
         if(!_globalCharCount.ContainsKey(glyph))
             _globalCharCount.Add(glyph, 0);
     }
-    private void AddToWordListByLength(string word) {
-        InitWordListByLengthIfNotExist(word.Length);
-        _dictWordListByLength[word.Length].Add(word);
-    }
-    private void InitWordListByLengthIfNotExist(int length) {
-        if (!_dictWordListByLength.ContainsKey(length))
-            _dictWordListByLength.Add(length, new List<string>());
-    }
-
     private void InitCharCountByLengthIfNotExist(int length) {
         if(!_charCountByLength.ContainsKey(length))
             _charCountByLength.Add(length, new Dictionary<char, int>());
     }
-
     private void InitCharCountEntryIfNotExist(Dictionary<char, int> dictionary, char glyph) {
         if(!dictionary.ContainsKey(glyph))
             dictionary.Add(glyph, 0);
@@ -92,79 +104,49 @@ public class DictionarySplitterByLength {
             }
         }
     }
+    private void GenerateReport() {
 
-    private static IEnumerable<string> CleanseInputList(IReadOnlyList<string> input) {
-        var output = new string[input.Count];
+        var sortedWordListByLength = _wordListByLength.OrderBy(p => p.Key).ToList();
+        var totalWords = sortedWordListByLength.Sum(s => s.Value.Count);
 
-        for (var i = 0; i < input.Count; i += 1) {
-            output[i] = CleanseInput(input[i]);
-        }
+        foreach (var wordListByLength in sortedWordListByLength) {
+            var totalCharForLength = wordListByLength.Value.Sum(s => s.Length);
 
-        output = FilterDuplicate(output);
-
-        Array.Sort(output);
-
-        return output;
-    }
-
-    private static string CleanseInput(string input) {
-        return input.Trim().ToLowerInvariant();
-    }
-    private static string[] FilterDuplicate(IEnumerable<string> input) {
-        return input.Distinct().ToArray();
-    }
-
-    private void Summary() {
-
-        foreach (var length in _charCountByLength.Keys) {
-            var d = _charCountByLength[length];
-
-            foreach (var letter in d.Keys) {
-                if (!_globalCharCount.ContainsKey(letter))
-                    _globalCharCount.Add(letter, 1);
-                else
-                    _globalCharCount[letter] += d[letter];
-            }
-        }
-
-        var lengthDistList = _dictWordListByLength.OrderBy(p => p.Key).ToList();
-        var totalWords = _dictWordListByLength.Sum(s => s.Value.Count);
-        foreach (var lengthDist in lengthDistList) {
-            var totalCharForLength = lengthDist.Value.Sum(s => s.Length);
-            var wordPercent = lengthDist.Value.Count / (double)totalWords;
-            Console.WriteLine($"LengthDistribution {{ Length = {lengthDist.Key}, Count = {lengthDist.Value.Count} ({wordPercent:P5}), Total Char = {totalCharForLength}");
+            var wordRatioByLength = wordListByLength.Value.Count / (double)totalWords;
+            Console.WriteLine($"LengthDistribution {{ Length = {wordListByLength.Key}, Count = {wordListByLength.Value.Count} ({wordRatioByLength:P5}), Total Char = {totalCharForLength}");
 
 
-            var charDist = _charCountByLength[lengthDist.Key];
+            var charDist = _charCountByLength[wordListByLength.Key];
             var charDistList = charDist.OrderBy(pair => pair.Key).ToList();
 
             foreach ((var key, var value) in charDistList) {
                 var charPercentForLength = value / (double)totalCharForLength;
                 Console.WriteLine($"\t|- CharDistribution {{ Char = '{key}', Count = {value} ({charPercentForLength:P5})}}");
             }
-            Console.WriteLine("}");
-//            var lengthDistribution = new LengthDistribution(length, _dictByLength[length].Count, charDistList.ToArray());
-
         }
 
-        var _dictByCharList = _globalCharCount.OrderBy(pair => pair.Key).ToList();
-        var totalCharForChar = _dictByCharList.Sum(s => s.Value);
-        foreach ((var key, var value) in _dictByCharList) {
-            var charPercent = value / (double)totalCharForChar;
-            Console.WriteLine($"FullCharDistribution {{ Char = '{key}', Count = {value} ({charPercent:P5})}}");
-        }
-        Console.WriteLine($"Total Char = {totalCharForChar}");
-//        var fullCharDistList = _dictByChar.Keys.Select(letter => new CharDistribution(letter, _dictByChar[letter])).ToList();
-//        Console.WriteLine(fullCharDistList);
+        var globalCharDist = GetGlobalCharDistribution();
     }
 
-    async Task ExportByLength(string outputFilePath = "") {
-        foreach (var length in _dictWordListByLength.Keys) {
-            var wordList = _dictWordListByLength[length];
-            await File.WriteAllLinesAsync(Path.Combine(outputFilePath, $"len{length:d2}.txt"), wordList);
-        }
+    private GlobalCharDistribution GetGlobalCharDistribution() {
+        var sortedCharCountList = _globalCharCount.OrderBy(pair => pair.Key).ToList();
+        var totalChar = _words.Sum(s => s.Length);
+
+        var result = sortedCharCountList.Select(
+            pair => {
+                (var key, var value) = pair;
+                var ratioOfCurrentChar = value / (double)totalChar;
+                return new CharDistribution(key, value, ratioOfCurrentChar);
+            });
+
+        return new GlobalCharDistribution(totalChar, result.ToArray());
     }
 
-    private record LengthDistribution(int Length, int Count, CharDistribution[] CharDistributions);
-    private record CharDistribution(char Letter, int Count);
+
+
+    private record DistributionReport(GlobalCharDistribution distByChar, LengthDistribution[] distByLength);
+    private record GlobalLengthDistribution(int TotalWord, LengthDistribution[] LengthDistributions);
+    private record LengthDistribution(int Length, int Count, double Ratio, int TotalChar, CharDistribution[] CharDistributions) : GlobalCharDistribution(TotalChar, CharDistributions);
+    private record GlobalCharDistribution(int TotalChar, CharDistribution[] CharDistributions);
+    private record CharDistribution(char Letter, int Count, double Ratio);
 }
