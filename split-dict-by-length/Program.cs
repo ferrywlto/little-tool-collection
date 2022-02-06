@@ -8,13 +8,16 @@ var dictFilePath = "dictionary.txt";
 t.SetTimeToNow();
 Console.WriteLine("Begin read dict file...");
 
-await p.Load(dictFilePath);
+var words = await p.Load(dictFilePath);
 t.PrintTimeUsedSinceLastTask();
-
-p.GroupWordsByLength();
-t.PrintTimeUsedSinceLastTask();
-
-var report = p.GetDistributionReport();
 
 await p.ExportByLength();
+t.PrintTimeUsedSinceLastTask();
+
+var a = new DistributionAnalyzer();
+var report = a.AnalyzeDistribution(words);
+t.PrintTimeUsedSinceLastTask();
+
+var consoleReporter = new ConsoleOutput();
+consoleReporter.Output(report);
 t.PrintTimeUsedSinceLastTask();

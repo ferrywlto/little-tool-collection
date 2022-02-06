@@ -20,22 +20,24 @@ public class DictionarySplitterByLength {
         this.performAnalysis = performAnalysis;
         this.exportAnalysis = exportAnalysis;
     }
-    public async Task Load(string inputFilePath) {
+    public async Task<IEnumerable<string>> Load(string inputFilePath) {
         if (!File.Exists(inputFilePath)) throw new FileNotFoundException();
 
         var loadedWords = await File.ReadAllLinesAsync(inputFilePath);
         _words = CleanseInputList(loadedWords).ToList();
         InitializeAfterLoad();
+        GroupWordsByLength();
+        return _words;
     }
     private void InitializeAfterLoad() {
-        _totalWords = _words.Count;
-        _totalChars = _words.Any() ? _words.Sum(s => s.Length) : 0;
+//        _totalWords = _words.Count;
+//        _totalChars = _words.Any() ? _words.Sum(s => s.Length) : 0;
         _maxWordLength = _words.Any() ? _words.Max(s => s.Length) : 0;
-        _globalCharDistribution = InitializedCharDistribution();
-        _charDistributionByLength = Enumerable.Range(1, _maxWordLength).ToDictionary(i => i, _ => InitializedCharDistribution());
+//        _globalCharDistribution = InitializedCharDistribution();
+//        _charDistributionByLength = Enumerable.Range(1, _maxWordLength).ToDictionary(i => i, _ => InitializedCharDistribution());
         _wordListByLength = Enumerable.Range(1, _maxWordLength).ToDictionary(i => i, _ => new List<string>());
     }
-    private Dictionary<char, int> InitializedCharDistribution() => Alphabet.ToDictionary(c => c, _ => 0);
+//    private Dictionary<char, int> InitializedCharDistribution() => Alphabet.ToDictionary(c => c, _ => 0);
 
     private static IEnumerable<string> CleanseInputList(IEnumerable<string> input) =>
         FilterDuplicate(input.Select(CleanseInput)).OrderBy(s => s);
@@ -58,21 +60,21 @@ public class DictionarySplitterByLength {
         }
     }
 
-    public DistributionReport GetDistributionReport() {
-        return new DistributionReport(GetGlobalCharDistribution(), GetGlobalLengthDistribution());
+    public DistributionReport2 GetDistributionReport() {
+        return new DistributionReport2(GetGlobalCharDistribution(), GetGlobalLengthDistribution());
     }
     private GlobalLengthDistribution GetGlobalLengthDistribution() {
         return new GlobalLengthDistribution(_words.Count, GetLengthDistributions());
     }
-    private LengthDistribution[] GetLengthDistributions() {
+    private LengthDistributionX[] GetLengthDistributions() {
         return _wordListByLength.Keys.Select(GetLengthDistribution).ToArray();
     }
-    private LengthDistribution GetLengthDistribution(int length) {
+    private LengthDistributionX GetLengthDistribution(int length) {
         var totalWordForLength = _wordListByLength[length].Count;
         var wordRatioByLength = totalWordForLength / (double)_totalWords;
 
         var charDistributions = GetCharDistributionsByLength(length);
-        return new LengthDistribution(
+        return new LengthDistributionX(
             length,
             totalWordForLength,
             wordRatioByLength,
@@ -105,7 +107,6 @@ public class DictionarySplitterByLength {
         return new GlobalCharDistribution(_totalChars, result.ToArray());
     }
     private void CountCharDistributionForAllWords() {
-        _globalCharDistribution.Clear();
         _words.ForEach(CountCharDistribution);
     }
     private void CountCharDistribution(string word) {
@@ -113,11 +114,19 @@ public class DictionarySplitterByLength {
             _globalCharDistribution[c] += 1;
         }
     }
-
-
-    public record DistributionReport(GlobalCharDistribution DistByChar, GlobalLengthDistribution DistByLength);
-    public record GlobalLengthDistribution(int TotalWord, LengthDistribution[] LengthDistributions);
-    public record LengthDistribution(int Length, int Count, double Ratio, int TotalChar, CharDistribution[] CharDistributions) : GlobalCharDistribution(TotalChar, CharDistributions);
-    public record GlobalCharDistribution(int TotalChar, CharDistribution[] CharDistributions);
-    public record CharDistribution(char Letter, int Count, double Ratio);
 }
+
+public record DistributionReport2(GlobalCharDistribution DistByChar, GlobalLengthDistribution DistByLength);
+public record GlobalLengthDistribution(int TotalWord, LengthDistributionX[] LengthDistributions);
+public record LengthDistributionX(int Length, int Count, double Ratio, int TotalChar, CharDistribution[] CharDistributions) : GlobalCharDistribution(TotalChar, CharDistributions);
+public record GlobalCharDistribution(int TotalChar, CharDistribution[] CharDistributions);
+
+
+public record DistributionReport(LengthDistribution[] LengthDistributions);
+public record LengthDistribution(
+    int Length,
+    int Count,
+    double Ratio,
+    CharDistribution[] CharDistributions
+);
+public record CharDistribution(char Letter, int Count, double Ratio);
