@@ -1,23 +1,21 @@
 using LittleToolCollection;
 
 var t = new TimeMeasurer();
-var p = new DictionarySplitterByLength();
-
-var dictFilePath = "dictionary.txt";
-
 t.SetTimeToNow();
-Console.WriteLine("Begin read dict file...");
+Console.WriteLine("Begin...");
 
-var words = await p.Load(dictFilePath);
+const string dictFilePath = "dictionary.txt";
+var splitter = new DictionarySplitterByLength();
+var words = await splitter.Load(dictFilePath);
 t.PrintTimeUsedSinceLastTask();
 
-await p.ExportByLength();
+await splitter.ExportByLength();
 t.PrintTimeUsedSinceLastTask();
 
-var a = new DistributionAnalyzer();
-var report = a.AnalyzeDistribution(words);
+var analyzer = new DistributionAnalyzer();
+var report = analyzer.AnalyzeDistribution(words);
 t.PrintTimeUsedSinceLastTask();
 
-var consoleReporter = new ConsoleOutput();
-consoleReporter.Output(report);
+var console = new ConsoleOutput();
+console.Output(report);
 t.PrintTimeUsedSinceLastTask();
